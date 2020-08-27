@@ -12,7 +12,7 @@
 #define FAF_DIR 0x10
 #define FAF_ARCHIVE 0x20
 
-struct __attribute__ ((__packed__)) boot {
+typedef struct __attribute__ ((__packed__)) boot {
     char assembly_code[3]; // instructions to jump to boot code
     char oem[8]; // in ASCII
     short bytes_per_sector; // 512,1024,2048,4096
@@ -35,9 +35,9 @@ struct __attribute__ ((__packed__)) boot {
     char fs_type_level[8]; // in ASCII
     char not_used_02[448];
     short signature_value; // 0xaa55
-}
+} boot_t;
 
-struct __attribute__ ((__packed__)) entry_data {
+typedef struct __attribute__ ((__packed__)) entry_data {
     char filename[11]; // 8 - filename, 3 - extension, also first char is an allocation status: 0x00=unallocated, 0xe5=deleted
     char attributes;
     char reserved;
@@ -50,9 +50,9 @@ struct __attribute__ ((__packed__)) entry_data {
     short modified_date; // yr=7b, mon=4b, day=5b
     short low_order_address_bytes; // Low-order 2 bytes of address of first cluster
     uint32_t file_size; // if directory = 0
-}
+} entry_data_t;
 
-struct __attribute__ ((__packed__)) longfilename {
+typedef struct __attribute__ ((__packed__)) longfilename {
     char entry_order; // The order of this entry in the sequence of long file name entries. This value helps you to know where in the file's name the characters from this entry should be placed. 
     short filename1[5]; // first 5 characters
     char attributes; // always should equal 0x0F (the long file name attribute)
@@ -61,8 +61,7 @@ struct __attribute__ ((__packed__)) longfilename {
     short filename2[6]; // next 6 characters
     char zero_here; // always 0
     short filename3[2]; // last 2 characters of this entry
-
-}
+} lfn_t;
 
 // http://www.c-jump.com/CIS24/Slides/FAT/lecture.html#F01_0030_layout
 
