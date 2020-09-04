@@ -3,10 +3,15 @@
 #include <assert.h>
 #include "fatum.h"
 
+boot_t br;
+char **fats;
+entry_data_t *root;
+entry_data_t *data;
+
+
 int main() {
     FILE *f;
     f = fopen("fat16.bin","rb");
-    boot_t br;
     int ret = fread(&br,sizeof(br),1,f);
     fclose(f);
     assert(ret==1);
