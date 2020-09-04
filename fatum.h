@@ -12,6 +12,13 @@
 #define FAF_DIR 0x10
 #define FAF_ARCHIVE 0x20
 
+#define LOC_VOLSTART 0
+#define LOC_FAT1START LOC_VOLSTART+br.reserved_area_size*br.bytes_per_sector
+#define LOC_FAT2START LOC_FAT1START+br.size_of_fat*br.bytes_per_sector
+#define LOC_ROOTSTART LOC_FAT1START+br.size_of_fat*2*br.bytes_per_sector
+#define LOC_DATASTART LOC_ROOTSTART+(br.max_files_in_root*sizeof(entry_data_t))
+#define LOC_CLUSTER(n) LOC_DATASTART+(n-2)*br.sectors_per_cluster*br.bytes_per_sector
+
 typedef struct __attribute__ ((__packed__)) boot {
     char assembly_code[3]; // instructions to jump to boot code
     char oem[8]; // in ASCII
