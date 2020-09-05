@@ -193,6 +193,29 @@ void command_prompt() {
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
         }
         else if (!strcmp(buffer,"pwd")) print_current_dir(current);
+        else if (!strncmp(buffer,"cat",3)) {
+            if (buffer[3]=='\0') {
+                printf("No filename\n");
+                continue;
+            }
+            if (buffer[3]==' ') {
+                entry_data_t *f = find_entry(current,buffer+4);
+                if(f==NULL) {
+                    printf("No file named %s found.\n",buffer+4);
+                    continue;
+                }
+                int status = print_file_contents(f);
+                if(status==-1 || status==-2) {
+                    printf("Wrong filename.\n");
+                    continue;
+                }
+                if(status==-3) {
+                    printf("%s is a directory.\n",buffer+4);
+                    continue;
+                }
+            }
+            else printf("What is a %s? A miserable pile of letters?\n", buffer);
+        }
         else printf("What is a %s? A miserable pile of letters?\n", buffer);
     }
     
@@ -204,6 +227,13 @@ void prepare_for_exit() {
         for (int i=0; i<br.number_of_fats; i++) if(fats[i]) free(fats[i]);
         free(fats);
     }
+    if (history.dirs) {
+        while(history.size>0) {
+            if(history.dirs[history.size-1]) free(history.dirs[history.size-1]);
+            history.size--;
+        }
+        free(history.dirs);
+    }
     if (data) free(data);
 }
 
@@ -214,14 +244,14 @@ void show_dir_content(entry_data_t *first_entry) {
     filetime_t mt;
     short indent;
     char formatted[13];
-    short cluster;
-    short next_cluster;
+    unsigned short cluster;
+    unsigned short next_cluster;
     short offset=0;
     int cluster_size;
 
     if(first_entry==root) {
         cluster=0;
-        next_cluster=(short)0xFFFF;
+        next_cluster=(unsigned short)0xFFFF;
         cluster_size=br.max_files_in_root*sizeof(entry_data_t);
     }
     else {
@@ -251,7 +281,7 @@ void show_dir_content(entry_data_t *first_entry) {
 
         offset+=sizeof(entry_data_t);
         if(offset>=cluster_size) {
-            if(next_cluster>=(short)0x0002 && next_cluster<=(short)0xFFF6) {
+            if(next_cluster>=(unsigned short)0x0002 && next_cluster<=(unsigned short)0xFFF6) {
                 current=(entry_data_t*)(data+JMP_CLUSTER(next_cluster));
                 cluster=next_cluster;
                 next_cluster=get_fat_index(cluster,fats[0]);
@@ -268,7 +298,7 @@ void show_dir_content(entry_data_t *first_entry) {
 entry_data_t *fetch_dir(entry_data_t *dir) {
     if(dir==NULL) return root;
     if(dir->attributes!=FAF_DIR) return NULL;
-    if(dir->low_order_address_bytes==(short)0x00) return root;
+    if(dir->low_order_address_bytes==(unsigned short)0x00) return root;
     return (entry_data_t*)(data+JMP_CLUSTER(dir->low_order_address_bytes));
 }
 
@@ -330,8 +360,8 @@ int hidden_in_dir(entry_data_t *entry, char hide_dots) {
     return 0;
 }
 
-short get_fat_index(unsigned int index, const char* FAT) {
-    short* fat_pointer = (short*)FAT;
+unsigned short get_fat_index(unsigned int index, const char* FAT) {
+    unsigned short* fat_pointer = (unsigned short*)FAT;
     for (int i=0; i<index; i++) {
         fat_pointer+=1;
     }
@@ -374,6 +404,30 @@ void debug_read() {
     printf("Root start: %d\n",LOC_ROOTSTART);
     printf("Data start: %ld\n", LOC_DATASTART );
     for (int i=0; i<100; i++) printf("%02hhx ",data[i+JMP_CLUSTER(6)]);
+}
+
+int print_file_contents(entry_data_t *file) {
+    if(file==NULL) return -1;
+    if(file->filename[0]==FEI_UNALLOC || file->filename[0]==FEI_DELETED) return -2;
+    if(file->attributes==FAF_DIR) return -3;
+    unsigned short current = file->low_order_address_bytes;
+    uint32_t wait=file->file_size;
+    uint32_t cluster_size=br.bytes_per_sector*br.sectors_per_cluster;
+    char *p;
+    while(1) {
+        if(current>=(unsigned short)0x0002 && current<=(unsigned short)0xFFF6) {
+            p=data+JMP_CLUSTER(current);
+            if(wait>cluster_size) for(int i=0; i<cluster_size; i++) printf("%c",*(p+i));
+            else for(int i=0; i<wait; i++) printf("%c",*(p+i));
+        }
+        else if(current==(unsigned short)0xFFF7) {
+            printf("\nCluster corrupted\n");
+            return -4;
+        }
+        else if(current>=(unsigned short)0xFFF8) break;
+        current=get_fat_index(current,fats[0]);
+    }
+    return 0;
 }
 
 int main() {

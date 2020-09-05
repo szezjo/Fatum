@@ -73,10 +73,10 @@ typedef struct __attribute__ ((__packed__)) entry_data {
     short creation_time; // hr=5b, min=6b, sec=5b
     short creation_date; // yr=7b, mon=4b, day=5b
     short access_date; // yr=7b, mon=4b, day=5b
-    short high_order_address_bytes; // High-order 2 bytes of address of first cluster (0 for FAT12/16)
+    unsigned short high_order_address_bytes; // High-order 2 bytes of address of first cluster (0 for FAT12/16)
     short modified_time; // hr=5b, min=6b, sec=5b
     short modified_date; // yr=7b, mon=4b, day=5b
-    short low_order_address_bytes; // Low-order 2 bytes of address of first cluster
+    unsigned short low_order_address_bytes; // Low-order 2 bytes of address of first cluster
     uint32_t file_size; // if directory = 0
 } entry_data_t;
 
@@ -120,8 +120,9 @@ void show_dir_content(entry_data_t *first_entry);
 int format_filename(const char *filename, char *dst);
 entry_data_t *fetch_dir(entry_data_t *dir);
 entry_data_t *find_entry(entry_data_t *pwd, const char *filename);
-short get_fat_index(unsigned int index, const char* FAT);
+unsigned short get_fat_index(unsigned int index, const char* FAT);
 void print_current_dir(entry_data_t *pwd);
+int print_file_contents(entry_data_t *file);
 
 // http://www.c-jump.com/CIS24/Slides/FAT/lecture.html#F01_0030_layout
 
