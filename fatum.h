@@ -70,6 +70,8 @@ typedef struct __attribute__ ((__packed__)) longfilename {
     short filename3[2]; // last 2 characters of this entry
 } lfn_t;
 
+int load_disk(const char *filename);
+
 // http://www.c-jump.com/CIS24/Slides/FAT/lecture.html#F01_0030_layout
 
 #endif //FATUM_H
