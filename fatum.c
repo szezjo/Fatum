@@ -117,7 +117,7 @@ void command_prompt() {
     char fn[13];
     entry_data_t *current = root;
     while(1) {
-        if(history.size==0) printf("/");
+        if(history.size==0) printf("\\");
         else printf("%s",history.dirs[history.size-1]);
         printf("> ");
         scanf("%[^\n]s\n",buffer);
@@ -192,6 +192,7 @@ void command_prompt() {
             }
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
         }
+        else if (!strcmp(buffer,"pwd")) print_current_dir(current);
         else printf("What is a %s? A miserable pile of letters?\n", buffer);
     }
     
@@ -355,7 +356,10 @@ filetime_t get_time(short time) {
 }
 
 void print_current_dir(entry_data_t *pwd) {
-    //...
+    if(pwd==NULL) return;
+    printf("Current working directory: \\");
+    for (int i=0; i<history.size; i++) printf("%s\\",history.dirs[i]);
+    printf("\n");
 }
 
 void flush_scan() {
