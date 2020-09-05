@@ -111,6 +111,7 @@ int load_disk(const char *filename) {
 
 void command_prompt() {
     char buffer[256];
+    entry_data_t *current = root;
     while(1) {
         printf("> ");
         scanf("%[^\n]s\n",buffer);
@@ -119,7 +120,24 @@ void command_prompt() {
             prepare_for_exit();
             break;
         }
-        printf("What is a %s? A miserable pile of letters?\n", buffer);
+        if(!strncmp(buffer,"dir",3)) {
+            if(buffer[3]=='\0') show_dir_content(current);
+            else if(buffer[3]==' ') {
+                entry_data_t *dir = find_entry(current,buffer+4);
+                if(dir==NULL) {
+                    printf("No directory named %s found.\n", buffer+4);
+                    continue;
+                }
+                entry_data_t *fetched = fetch_dir(dir);
+                if(fetched==NULL) {
+                    printf("%s is not a directory.\n", buffer+4);
+                    continue;
+                }
+                show_dir_content(fetched);                
+            }
+            else printf("What is a %s? A miserable pile of letters?\n", buffer);
+        }
+        else printf("What is a %s? A miserable pile of letters?\n", buffer);
     }
     
 }
@@ -157,6 +175,27 @@ void show_dir_content(entry_data_t *first_entry) {
         }
         current=(entry_data_t*)((char*)current+sizeof(entry_data_t));
     }
+}
+
+entry_data_t *fetch_dir(entry_data_t *dir) {
+    if(dir==NULL) return root;
+    if(dir->attributes!=FAF_DIR) return NULL;
+
+    return (entry_data_t*)(data+JMP_CLUSTER(dir->low_order_address_bytes));
+}
+
+entry_data_t *find_entry(entry_data_t *pwd, const char *filename) {
+    if(pwd==NULL || filename==NULL) return NULL;
+    entry_data_t *current = pwd;
+    char formatted[13];
+    while(current->filename[0]!=FEI_UNALLOC) {
+        if(hidden_in_dir(current)==0) {
+            format_filename(current->filename,formatted);
+            if(!strcmp(formatted,filename)) return current;
+        }
+        current=(entry_data_t*)((char*)current+sizeof(entry_data_t));
+    }
+    return NULL;
 }
 
 int format_filename(const char *filename, char *dst) {
@@ -255,13 +294,11 @@ int main() {
     printf("Creation time: 0x%02hhx\n",filep->creation_time_tenths);
     printf("File size: %u\n",filep->file_size);
 
-    char str[100];
-    memcpy(str,filep,100);
-    printf("\n\n%.*s\n",100,str);
-
     assert(memcmp(fats[0],fats[1],br.size_of_fat*br.bytes_per_sector)==0);
 
     show_dir_content(root);
+    int n=3;
+    printf("Cluster %d location: %ld", n, LOC_CLUSTER(n));
     printf("\n");
     command_prompt();
     return 0;

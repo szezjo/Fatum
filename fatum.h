@@ -4,16 +4,16 @@
 #include <stdint.h>
 
 // File Attributes Flags
-#define FAF_READ_ONLY 0x01
-#define FAF_HIDDEN_FILE 0x02
-#define FAF_SYSTEM_FILE 0x04
-#define FAF_VOL_LABEL 0x08
-#define FAF_LFN 0x0F
-#define FAF_DIR 0x10
-#define FAF_ARCHIVE 0x20
+#define FAF_READ_ONLY (char)0x01
+#define FAF_HIDDEN_FILE (char)0x02
+#define FAF_SYSTEM_FILE (char)0x04
+#define FAF_VOL_LABEL (char)0x08
+#define FAF_LFN (char)0x0F
+#define FAF_DIR (char)0x10
+#define FAF_ARCHIVE (char)0x20
 
 // File Entry 1st Byte: unallocated/deleted
-#define FEI_UNALLOC 0x00
+#define FEI_UNALLOC (char)0x00
 #define FEI_DELETED (char)0xe5
 
 // Datetime masks and shifts
@@ -113,6 +113,8 @@ filedate_t get_date(short date);
 filetime_t get_time(short time);
 void show_dir_content(entry_data_t *first_entry);
 int format_filename(const char *filename, char *dst);
+entry_data_t *fetch_dir(entry_data_t *dir);
+entry_data_t *find_entry(entry_data_t *pwd, const char *filename);
 
 // http://www.c-jump.com/CIS24/Slides/FAT/lecture.html#F01_0030_layout
 
