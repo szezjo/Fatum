@@ -103,6 +103,11 @@ typedef struct time {
     char sec;
 } filetime_t;
 
+typedef struct history {
+    char** dirs;
+    size_t size;
+} history_t;
+
 int load_disk(const char *filename);
 void command_prompt();
 void prepare_for_exit();
@@ -116,6 +121,7 @@ int format_filename(const char *filename, char *dst);
 entry_data_t *fetch_dir(entry_data_t *dir);
 entry_data_t *find_entry(entry_data_t *pwd, const char *filename);
 short get_fat_index(unsigned int index, const char* FAT);
+void print_current_dir(entry_data_t *pwd);
 
 // http://www.c-jump.com/CIS24/Slides/FAT/lecture.html#F01_0030_layout
 

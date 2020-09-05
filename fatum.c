@@ -2,12 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <ctype.h>
 #include "fatum.h"
 
 boot_t br;
 char **fats;
 entry_data_t *root;
 char *data;
+
+history_t history;
 
 int load_disk(const char *filename) {
     if (filename==NULL) {
@@ -111,8 +114,11 @@ int load_disk(const char *filename) {
 
 void command_prompt() {
     char buffer[256];
+    char fn[13];
     entry_data_t *current = root;
     while(1) {
+        if(history.size==0) printf("/");
+        else printf("%s",history.dirs[history.size-1]);
         printf("> ");
         scanf("%[^\n]s\n",buffer);
         flush_scan();
@@ -146,12 +152,43 @@ void command_prompt() {
                     printf("No directory named %s found.\n", buffer+3);
                     continue;
                 }
+                strcpy(fn,dir->filename);
+                format_filename(fn,fn);
                 entry_data_t *fetched = fetch_dir(dir);
                 if(fetched==NULL) {
                     printf("%s is not a directory.\n", buffer+3);
                     continue;
                 }
                 current = fetched;
+                if(!strcmp(buffer+3,"..")) {
+                    history.size--;
+                    free(history.dirs[history.size]);
+                    if(history.size==0) {
+                        free(history.dirs);
+                        history.dirs=NULL;
+                    }
+                    else {
+                        history.dirs=realloc(history.dirs,sizeof(char*)*history.size);
+                        if(history.dirs==NULL) {
+                            printf("Error: allocation error\n");
+                            break;
+                    }
+                    }
+                }
+                else {
+                    history.size++;
+                    history.dirs=realloc(history.dirs,sizeof(char*)*history.size);
+                    if(history.dirs==NULL) {
+                        printf("Error: allocation error\n");
+                        break;
+                    }
+                    history.dirs[history.size-1]=malloc(sizeof(char)*9);
+                    if(history.dirs[history.size-1]==NULL) {
+                        printf("Error: allocation error\n");
+                        break;
+                    }
+                    strcpy(history.dirs[history.size-1],fn);
+                }
             }
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
         }
@@ -242,10 +279,15 @@ entry_data_t *find_entry(entry_data_t *pwd, const char *filename) {
     short offset=0;
     entry_data_t *current = pwd;
     char formatted[13];
+    char fn[13];
+    for (int i=0; i<12; i++) fn[i]=filename[i];
+    fn[12]='\0';
+    for (int i=0; i<strlen(fn); i++) fn[i]=tolower(fn[i]);
     while(current->filename[0]!=FEI_UNALLOC) {
         if(hidden_in_dir(current,0)==0) {
             format_filename(current->filename,formatted);
-            if(!strcmp(formatted,filename)) return current;
+            for (int i=0; i<strlen(formatted); i++) formatted[i]=tolower(formatted[i]);
+            if(!strcmp(formatted,fn)) return current;
         }
         offset+=sizeof(entry_data_t);
         if(offset>=cluster_size) break;
@@ -312,6 +354,10 @@ filetime_t get_time(short time) {
     return ft;
 }
 
+void print_current_dir(entry_data_t *pwd) {
+    //...
+}
+
 void flush_scan() {
     char c;
     while ((c = getchar()) != '\n' && c != EOF) {}
@@ -329,6 +375,8 @@ void debug_read() {
 int main() {
 
     load_disk("fat16.bin");
+    history.dirs=NULL;
+    history.size=0;
 
     printf("Assembly code: %02hhx %02hhx %02hhx\n",br.assembly_code[0],br.assembly_code[1],br.assembly_code[2]);
     printf("OEM: %.*s\n",8,br.oem);
