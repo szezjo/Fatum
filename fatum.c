@@ -158,8 +158,27 @@ void show_dir_content(entry_data_t *first_entry) {
     filetime_t mt;
     short indent;
     char formatted[13];
+    short cluster;
+    short next_cluster;
+    short offset=0;
+    int cluster_size;
+
+    if(first_entry==root) {
+        cluster=0;
+        next_cluster=(short)0xFFFF;
+        cluster_size=br.max_files_in_root*sizeof(entry_data_t);
+    }
+    else {
+        entry_data_t *pwd = find_entry(current,".");
+        if(pwd==NULL) return;
+        cluster = pwd->low_order_address_bytes;
+        next_cluster = get_fat_index(cluster,fats[0]);
+        cluster_size = br.bytes_per_sector*br.sectors_per_cluster;
+    }
+    
+
     while(current->filename[0]!=FEI_UNALLOC) {
-        if(hidden_in_dir(current)==0) {
+        if(hidden_in_dir(current,1)==0) {
             md=get_date(current->modified_date);
             mt=get_time(current->modified_time);
             printf("%02d/%02d/%04d %02d:%02d ",md.day,md.month,md.year,mt.hrs,mt.min);
@@ -173,7 +192,20 @@ void show_dir_content(entry_data_t *first_entry) {
             else printf("%u B",current->file_size);
             printf("\n");           
         }
-        current=(entry_data_t*)((char*)current+sizeof(entry_data_t));
+
+        offset+=sizeof(entry_data_t);
+        if(offset>=cluster_size) {
+            if(next_cluster>=(short)0x0002 && next_cluster<=(short)0xFFF6) {
+                current=(entry_data_t*)(data+JMP_CLUSTER(next_cluster));
+                cluster=next_cluster;
+                next_cluster=get_fat_index(cluster,fats[0]);
+                offset=0;
+            }
+            else {
+                return;
+            }
+        }
+        else current=(entry_data_t*)((char*)current+sizeof(entry_data_t));
     }
 }
 
@@ -186,13 +218,19 @@ entry_data_t *fetch_dir(entry_data_t *dir) {
 
 entry_data_t *find_entry(entry_data_t *pwd, const char *filename) {
     if(pwd==NULL || filename==NULL) return NULL;
+    int cluster_size;
+    if(pwd==root) cluster_size=br.max_files_in_root*sizeof(entry_data_t);
+    else cluster_size=br.bytes_per_sector*br.sectors_per_cluster;
+    short offset=0;
     entry_data_t *current = pwd;
     char formatted[13];
     while(current->filename[0]!=FEI_UNALLOC) {
-        if(hidden_in_dir(current)==0) {
+        if(hidden_in_dir(current,0)==0) {
             format_filename(current->filename,formatted);
             if(!strcmp(formatted,filename)) return current;
         }
+        offset+=sizeof(entry_data_t);
+        if(offset>=cluster_size) break;
         current=(entry_data_t*)((char*)current+sizeof(entry_data_t));
     }
     return NULL;
@@ -224,11 +262,19 @@ int format_filename(const char *filename, char *dst) {
     return 0;  
 }
 
-int hidden_in_dir(entry_data_t *entry) {
+int hidden_in_dir(entry_data_t *entry, char hide_dots) {
     if(entry->filename[0]==FEI_DELETED) return 1;
     if(entry->attributes==FAF_LFN) return 1;
-    if(*(entry->filename)=='.') return 1;
+    if(hide_dots && *(entry->filename)=='.') return 1;
     return 0;
+}
+
+short get_fat_index(unsigned int index, const char* FAT) {
+    short* fat_pointer = (short*)FAT;
+    for (int i=0; i<index; i++) {
+        fat_pointer+=1;
+    }
+    return *fat_pointer;
 }
 
 filedate_t get_date(short date) {
@@ -297,8 +343,10 @@ int main() {
     assert(memcmp(fats[0],fats[1],br.size_of_fat*br.bytes_per_sector)==0);
 
     show_dir_content(root);
-    int n=3;
-    printf("Cluster %d location: %ld", n, LOC_CLUSTER(n));
+    int n=5;
+    printf("Cluster %d location: %ld\n", n, LOC_CLUSTER(n));
+    printf("FAT index: %hu\n", get_fat_index(n,fats[0]));
+    printf("%d",get_fat_index(n,fats[0])==(unsigned short)0xFFFF);
     printf("\n");
     command_prompt();
     return 0;
