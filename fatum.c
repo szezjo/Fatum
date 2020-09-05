@@ -120,7 +120,7 @@ void command_prompt() {
             prepare_for_exit();
             break;
         }
-        if(!strncmp(buffer,"dir",3)) {
+        else if(!strncmp(buffer,"dir",3)) {
             if(buffer[3]=='\0') show_dir_content(current);
             else if(buffer[3]==' ') {
                 entry_data_t *dir = find_entry(current,buffer+4);
@@ -134,6 +134,24 @@ void command_prompt() {
                     continue;
                 }
                 show_dir_content(fetched);                
+            }
+            else printf("What is a %s? A miserable pile of letters?\n", buffer);
+        }
+        else if(!strncmp(buffer,"cd",2)) {
+            if(buffer[2]=='\0') current=root;
+            else if(buffer[2]==' ') {
+                if(buffer[3]=='.' && buffer[4]=='\0') continue;
+                entry_data_t *dir = find_entry(current,buffer+3);
+                if(dir==NULL) {
+                    printf("No directory named %s found.\n", buffer+3);
+                    continue;
+                }
+                entry_data_t *fetched = fetch_dir(dir);
+                if(fetched==NULL) {
+                    printf("%s is not a directory.\n", buffer+3);
+                    continue;
+                }
+                current = fetched;
             }
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
         }
@@ -212,7 +230,7 @@ void show_dir_content(entry_data_t *first_entry) {
 entry_data_t *fetch_dir(entry_data_t *dir) {
     if(dir==NULL) return root;
     if(dir->attributes!=FAF_DIR) return NULL;
-
+    if(dir->low_order_address_bytes==(short)0x00) return root;
     return (entry_data_t*)(data+JMP_CLUSTER(dir->low_order_address_bytes));
 }
 
