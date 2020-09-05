@@ -12,12 +12,33 @@
 #define FAF_DIR 0x10
 #define FAF_ARCHIVE 0x20
 
+// File Entry 1st Byte: unallocated/deleted
+#define FEI_UNALLOC 0x00
+#define FEI_DELETED (char)0xe5
+
+// Datetime masks and shifts
+#define DAT_YEAR 0xFE00
+#define DAT_MONTH 0x1E0
+#define DAT_DAY 0x1F
+#define DAT_HOUR 0xF800
+#define DAT_MIN 0x7E0
+#define DAT_SEC 0x1F
+
+#define SHIFT_YEAR 9
+#define SHIFT_MONTH 5
+#define SHIFT_HOUR 11
+#define SHIFT_MIN 5
+
+// fseek locations
 #define LOC_VOLSTART 0
 #define LOC_FAT1START LOC_VOLSTART+br.reserved_area_size*br.bytes_per_sector
 #define LOC_FAT2START LOC_FAT1START+br.size_of_fat*br.bytes_per_sector
-#define LOC_ROOTSTART LOC_FAT1START+br.size_of_fat*2*br.bytes_per_sector
+#define LOC_ROOTSTART LOC_FAT1START+br.size_of_fat*br.number_of_fats*br.bytes_per_sector
 #define LOC_DATASTART LOC_ROOTSTART+(br.max_files_in_root*sizeof(entry_data_t))
 #define LOC_CLUSTER(n) LOC_DATASTART+(n-2)*br.sectors_per_cluster*br.bytes_per_sector
+
+// Cluster offset (from data block start)
+#define JMP_CLUSTER(n) (n-2)*br.sectors_per_cluster*br.bytes_per_sector
 
 typedef struct __attribute__ ((__packed__)) boot {
     char assembly_code[3]; // instructions to jump to boot code
@@ -70,7 +91,28 @@ typedef struct __attribute__ ((__packed__)) longfilename {
     short filename3[2]; // last 2 characters of this entry
 } lfn_t;
 
+typedef struct date {
+    short year;
+    char month;
+    char day;
+} filedate_t;
+
+typedef struct time {
+    char hrs;
+    char min;
+    char sec;
+} filetime_t;
+
 int load_disk(const char *filename);
+void command_prompt();
+void prepare_for_exit();
+void flush_scan();
+void debug_read();
+int hidden_in_dir(entry_data_t *entry);
+filedate_t get_date(short date);
+filetime_t get_time(short time);
+void show_dir_content(entry_data_t *first_entry);
+int format_filename(const char *filename, char *dst);
 
 // http://www.c-jump.com/CIS24/Slides/FAT/lecture.html#F01_0030_layout
 

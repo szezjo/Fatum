@@ -77,11 +77,151 @@ int load_disk(const char *filename) {
         return 2;
     }
 
-    // add allocating and reading data block
+    uint32_t root_sectors = sizeof(entry_data_t)*br.max_files_in_root/br.bytes_per_sector;
+    uint32_t sectors_in_fs;
+    if(br.sectors_in_fs>br.sectors_in_fs_large) sectors_in_fs=br.sectors_in_fs;
+    else sectors_in_fs=br.sectors_in_fs_large;
+    uint32_t data_sectors = sectors_in_fs-br.reserved_area_size-br.number_of_fats*br.size_of_fat-root_sectors;
+    
+    fseek(f,LOC_DATASTART,SEEK_SET);
+    data = calloc(1,data_sectors*br.bytes_per_sector);
+    if(data==NULL) {
+        for(int j=0; j<br.number_of_fats; j++) free(fats[j]);
+        fclose(f);
+        free(fats);
+        free(root);
+        printf("Error: Can't allocate memory for data block\n");
+        return 3;
+    }
+
+    ret = fread(data, data_sectors*br.bytes_per_sector, 1, f);
+    if(ret!=1) {
+        for(int j=0; j<br.number_of_fats; j++) free(fats[j]);
+        fclose(f);
+        free(fats);
+        free(root);
+        free(data);
+        printf("Error: Can't read data\n");
+        return 2;
+    }
+
     fclose(f);
     return 0;
 }
 
+void command_prompt() {
+    char buffer[256];
+    while(1) {
+        printf("> ");
+        scanf("%[^\n]s\n",buffer);
+        flush_scan();
+        if(!strcmp(buffer,"exit")) {
+            prepare_for_exit();
+            break;
+        }
+        printf("What is a %s? A miserable pile of letters?\n", buffer);
+    }
+    
+}
+
+void prepare_for_exit() {
+    if (root) free(root);
+    if (fats) {
+        for (int i=0; i<br.number_of_fats; i++) if(fats[i]) free(fats[i]);
+        free(fats);
+    }
+    if (data) free(data);
+}
+
+void show_dir_content(entry_data_t *first_entry) {
+    if(first_entry==NULL) return;
+    entry_data_t *current = first_entry;
+    filedate_t md;
+    filetime_t mt;
+    short indent;
+    char formatted[13];
+    while(current->filename[0]!=FEI_UNALLOC) {
+        if(hidden_in_dir(current)==0) {
+            md=get_date(current->modified_date);
+            mt=get_time(current->modified_time);
+            printf("%02d/%02d/%04d %02d:%02d ",md.day,md.month,md.year,mt.hrs,mt.min);
+            
+            format_filename(current->filename,formatted);
+            indent=13-strlen(formatted);
+            printf("%s",formatted);
+            for(int i=0; i<indent; i++) printf(" ");
+
+            if(current->attributes==FAF_DIR) printf("<DIR>");
+            else printf("%u B",current->file_size);
+            printf("\n");           
+        }
+        current=(entry_data_t*)((char*)current+sizeof(entry_data_t));
+    }
+}
+
+int format_filename(const char *filename, char *dst) {
+    if(filename==NULL) return -1;
+    int pos=0;
+
+    for (int i=0; i<8; i++) {
+        if(filename[i]==' ') break;
+        dst[pos]=filename[i];
+        pos++;
+    }
+
+    if(filename[8]==' ') {
+        dst[pos]='\0';
+        return 0;
+    }
+    
+    dst[pos]='.';
+    pos++;
+    for (int i=0; i<3; i++) {
+        if(filename[8+i]==' ') break;
+        dst[pos]=filename[8+i];
+        pos++;
+    }
+    dst[pos]='\0';
+    return 0;  
+}
+
+int hidden_in_dir(entry_data_t *entry) {
+    if(entry->filename[0]==FEI_DELETED) return 1;
+    if(entry->attributes==FAF_LFN) return 1;
+    if(*(entry->filename)=='.') return 1;
+    return 0;
+}
+
+filedate_t get_date(short date) {
+    filedate_t fd;
+    fd.year=(date&DAT_YEAR)>>SHIFT_YEAR;
+    fd.year+=1980;
+    fd.month=(date&DAT_MONTH)>>SHIFT_MONTH;
+    fd.day=(date&DAT_DAY);
+    return fd;
+}
+
+filetime_t get_time(short time) {
+    filetime_t ft;
+    ft.hrs=(time&DAT_HOUR)>>SHIFT_HOUR;
+    ft.min=(time&DAT_MIN)>>SHIFT_MIN;
+    ft.sec=(time&DAT_SEC)*2;
+    return ft;
+}
+
+void flush_scan() {
+    char c;
+    while ((c = getchar()) != '\n' && c != EOF) {}
+}
+
+void debug_read() {
+    printf("Volume start: %d\n",LOC_VOLSTART);
+    printf("Fat 1 start: %d\n",LOC_FAT1START);
+    printf("Fat 2 start: %d\n",LOC_FAT2START);
+    printf("Root start: %d\n",LOC_ROOTSTART);
+    printf("Data start: %ld\n", LOC_DATASTART );
+    for (int i=0; i<100; i++) printf("%02hhx ",data[i+JMP_CLUSTER(6)]);
+}
 
 int main() {
 
@@ -120,6 +260,10 @@ int main() {
     printf("\n\n%.*s\n",100,str);
 
     assert(memcmp(fats[0],fats[1],br.size_of_fat*br.bytes_per_sector)==0);
+
+    show_dir_content(root);
+    printf("\n");
+    command_prompt();
     return 0;
 }
 
