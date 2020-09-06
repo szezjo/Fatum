@@ -144,7 +144,15 @@ void command_prompt() {
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
         }
         else if(!strncmp(buffer,"cd",2)) {
-            if(buffer[2]=='\0') current=root;
+            if(buffer[2]=='\0') {
+                current=root;
+                if (history.dirs) {
+                    while(history.size>0) {
+                        if(history.dirs[history.size-1]) free(history.dirs[history.size-1]);
+                        history.size--;
+                    }
+                }
+            }
             else if(buffer[2]==' ') {
                 if(buffer[3]=='.' && buffer[4]=='\0') continue;
                 entry_data_t *dir = find_entry(current,buffer+3);
@@ -205,6 +213,29 @@ void command_prompt() {
                     continue;
                 }
                 int status = print_file_contents(f);
+                if(status==-1 || status==-2) {
+                    printf("Wrong filename.\n");
+                    continue;
+                }
+                if(status==-3) {
+                    printf("%s is a directory.\n",buffer+4);
+                    continue;
+                }
+            }
+            else printf("What is a %s? A miserable pile of letters?\n", buffer);
+        }
+        else if (!strncmp(buffer,"get",3)) {
+            if (buffer[3]=='\0') {
+                printf("No filename\n");
+                continue;
+            }
+            if (buffer[3]==' ') {
+                entry_data_t *f = find_entry(current,buffer+4);
+                if(f==NULL) {
+                    printf("No file named %s found.\n",buffer+4);
+                    continue;
+                }
+                int status = get_file_contents(f);
                 if(status==-1 || status==-2) {
                     printf("Wrong filename.\n");
                     continue;
@@ -417,7 +448,10 @@ int print_file_contents(entry_data_t *file) {
     while(1) {
         if(current>=(unsigned short)0x0002 && current<=(unsigned short)0xFFF6) {
             p=data+JMP_CLUSTER(current);
-            if(wait>cluster_size) for(int i=0; i<cluster_size; i++) printf("%c",*(p+i));
+            if(wait>cluster_size) {
+                for(int i=0; i<cluster_size; i++) printf("%c",*(p+i));
+                wait-=cluster_size;
+            }
             else for(int i=0; i<wait; i++) printf("%c",*(p+i));
         }
         else if(current==(unsigned short)0xFFF7) {
@@ -427,6 +461,42 @@ int print_file_contents(entry_data_t *file) {
         else if(current>=(unsigned short)0xFFF8) break;
         current=get_fat_index(current,fats[0]);
     }
+    return 0;
+}
+
+int get_file_contents(entry_data_t *file) {
+    if(file==NULL) return -1;
+    if(file->filename[0]==FEI_UNALLOC || file->filename[0]==FEI_DELETED) return -2;
+    if(file->attributes==FAF_DIR) return -3;
+    FILE *f;
+    char formatted[13];
+    format_filename(file->filename,formatted);
+    f = fopen(formatted,"wb");
+    if(f==NULL) {
+        return -5;
+    }
+    unsigned short current = file->low_order_address_bytes;
+    uint32_t wait=file->file_size;
+    uint32_t cluster_size=br.bytes_per_sector*br.sectors_per_cluster;
+    char *p;
+    while(1) {
+        if(current>=(unsigned short)0x0002 && current<=(unsigned short)0xFFF6) {
+            p=data+JMP_CLUSTER(current);
+            if(wait>cluster_size) {
+                fwrite(p,sizeof(char),cluster_size,f);
+                wait-=cluster_size;
+            }
+            else fwrite(p,sizeof(char),wait,f);
+        }
+        else if(current==(unsigned short)0xFFF7) {
+            printf("\nCluster corrupted\n");
+            fclose(f);
+            return -4;
+        }
+        else if(current>=(unsigned short)0xFFF8) break;
+        current=get_fat_index(current,fats[0]);
+    }
+    fclose(f);
     return 0;
 }
 
