@@ -124,6 +124,7 @@ unsigned short get_fat_index(unsigned int index, const char* FAT);
 void print_current_dir(entry_data_t *pwd);
 int print_file_contents(entry_data_t *file);
 int get_file_contents(entry_data_t *file);
+int zip_file_contents(entry_data_t *file1, entry_data_t *file2, const char *output_filename);
 
 // http://www.c-jump.com/CIS24/Slides/FAT/lecture.html#F01_0030_layout
 

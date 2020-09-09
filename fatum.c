@@ -5,6 +5,8 @@
 #include <ctype.h>
 #include "fatum.h"
 
+#define DEBUG 1
+
 boot_t br;
 char **fats;
 entry_data_t *root;
@@ -244,6 +246,39 @@ void command_prompt() {
                     printf("%s is a directory.\n",buffer+4);
                     continue;
                 }
+            }
+            else printf("What is a %s? A miserable pile of letters?\n", buffer);
+        }
+        else if (!strncmp(buffer,"zip",3)) {
+            if (buffer[3]=='\0') {
+                printf("No filename\n");
+                continue;
+            }
+            if (buffer[3]==' ') {
+                char *pos = buffer+4;
+                entry_data_t *f[3];
+                char *next;
+                for (int i=0; i<2; i++) {
+                    next = strchr(pos,' ');
+                    if (next==NULL) {
+                        break;
+                    }
+                    *next='\0';
+                    printf("Searching for file: %s\n",pos);
+                    f[i] = find_entry(current,pos);
+                    if(f==NULL) {
+                        printf("No file named %s found.\n",pos);
+                        break;
+                    }
+                    pos=next+1;   
+                }
+                next = strchr(pos,' ');
+                if(next)*next='\0';
+                int status = zip_file_contents(f[0],f[1],pos);
+                if(status==-1) printf("zip needs: 2 input files and 1 output file\n");
+                else if(status==-2) printf("Wrong filenames\n");
+                else if(status==-3) printf("zip doesn't accept directories\n");
+                else if(status==-5) printf("Can't open file\n");
             }
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
         }
@@ -499,6 +534,81 @@ int get_file_contents(entry_data_t *file) {
     fclose(f);
     return 0;
 }
+
+int zip_file_contents(entry_data_t *file1, entry_data_t *file2, const char *outfile) {
+    if(file1==NULL || file2==NULL || outfile==NULL) return -1;
+    if(file1->filename[0]==FEI_UNALLOC || file1->filename[0]==FEI_DELETED || file2->filename[0]==FEI_UNALLOC || file2->filename[0]==FEI_DELETED) return -2;
+    if(file1->attributes==FAF_DIR || file2->attributes==FAF_DIR) return -3;
+    FILE *f;
+    f = fopen(outfile,"wb");
+    if(f==NULL) return -5;
+    if(DEBUG==1) printf("File opened\n");
+    unsigned short current[2];
+    current[0]=file1->low_order_address_bytes;
+    current[1]=file2->low_order_address_bytes;
+    uint32_t wait[2];
+    wait[0]=file1->file_size;
+    wait[1]=file2->file_size;
+    uint32_t cluster_wait[2];
+    uint32_t cluster_size=br.bytes_per_sector*br.sectors_per_cluster;
+    char *pos[2]={NULL};
+    char *next[2];
+    size_t len;
+    char skip[2]={0};
+    while(1) {
+        for (int i=0; i<2; i++) {
+            if(wait[i]>0 && !skip[i]) {
+                if(current[i]>=(unsigned short)0x0002 && current[i]<=(unsigned short)0xFFF6) {
+                    if(pos[i]==NULL) {
+                        pos[i]=data+JMP_CLUSTER(current[i]);
+                        cluster_wait[i]=cluster_size;
+                    }
+                    next[i]=strchr(pos[i],'\n');
+                    if(next[i]) {
+                        *next[i]='\0';
+                        len=strlen(pos[i]);
+                    }
+                    if(next[i]==NULL || len>cluster_wait[i]) {
+                        if(next[i]) *next[i]='\n';
+                        if(wait[i]>cluster_wait[i]) {
+                            fwrite(pos[i],sizeof(char),cluster_wait[i],f);
+                            wait[i]-=cluster_wait[i];
+                        }
+                        else {
+                            fwrite(pos[i],sizeof(char),wait[i],f);
+                            wait[i]=0;
+                        }
+                        current[i]=get_fat_index(current[i],fats[0]);
+                        pos[i]=NULL;
+                        if(i==0) skip[1]=1;
+                        else skip[0]=1;
+                    }
+                    else {
+                        fwrite(pos[i],sizeof(char),len,f);
+                        fwrite("\n",sizeof(char),1,f);
+                        wait[i]-=(len+1);
+                        cluster_wait[i]-=(len+1);
+                        pos[i]=next[i]+1;
+                        *next[i]='\n';
+                        if(i==0) skip[1]=0;
+                        else skip[0]=0;
+                    }
+                }
+                else if(current[i]==(unsigned short)0xFFF7) {
+                    printf("\nCluster corrupted\n");
+                    fclose(f);
+                    return -4;
+                }
+                else if(current[i]>=(unsigned short)0xFFF8) wait[i]=0; 
+            }
+        }
+        if(wait[0]<=0 && wait[1]<=0) break;
+    }
+    fclose(f);
+    return 0;
+}
+
+
 
 int main() {
 
