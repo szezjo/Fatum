@@ -121,10 +121,13 @@ int format_filename(const char *filename, char *dst);
 entry_data_t *fetch_dir(entry_data_t *dir);
 entry_data_t *find_entry(entry_data_t *pwd, const char *filename);
 unsigned short get_fat_index(unsigned int index, const char* FAT);
-void print_current_dir(entry_data_t *pwd);
+void print_current_dir();
 int print_file_contents(entry_data_t *file);
 int get_file_contents(entry_data_t *file);
 int zip_file_contents(entry_data_t *file1, entry_data_t *file2, const char *output_filename);
+void print_root_info();
+void print_space_info();
+void print_file_info(entry_data_t *f);
 
 // http://www.c-jump.com/CIS24/Slides/FAT/lecture.html#F01_0030_layout
 

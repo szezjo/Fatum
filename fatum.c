@@ -202,7 +202,7 @@ void command_prompt() {
             }
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
         }
-        else if (!strcmp(buffer,"pwd")) print_current_dir(current);
+        else if (!strcmp(buffer,"pwd")) print_current_dir();
         else if (!strncmp(buffer,"cat",3)) {
             if (buffer[3]=='\0') {
                 printf("No filename\n");
@@ -264,7 +264,6 @@ void command_prompt() {
                         break;
                     }
                     *next='\0';
-                    printf("Searching for file: %s\n",pos);
                     f[i] = find_entry(current,pos);
                     if(f==NULL) {
                         printf("No file named %s found.\n",pos);
@@ -279,6 +278,27 @@ void command_prompt() {
                 else if(status==-2) printf("Wrong filenames\n");
                 else if(status==-3) printf("zip doesn't accept directories\n");
                 else if(status==-5) printf("Can't open file\n");
+            }
+            else printf("What is a %s? A miserable pile of letters?\n", buffer);
+        }
+        else if (!strcmp(buffer,"rootinfo")) {
+            print_root_info();
+        }
+        else if (!strcmp(buffer,"spaceinfo")) {
+            print_space_info();
+        }
+        else if (!strncmp(buffer,"fileinfo",8)) {
+            if (buffer[8]=='\0') {
+                printf("No filename\n");
+                continue;
+            }
+            if (buffer[8]==' ') {
+                entry_data_t *f = find_entry(current,buffer+9);
+                if(f==NULL) {
+                    printf("No file named %s found.\n",buffer+9);
+                    continue;
+                }
+                print_file_info(f);
             }
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
         }
@@ -451,8 +471,7 @@ filetime_t get_time(short time) {
     return ft;
 }
 
-void print_current_dir(entry_data_t *pwd) {
-    if(pwd==NULL) return;
+void print_current_dir() {
     printf("Current working directory: \\");
     for (int i=0; i<history.size; i++) printf("%s\\",history.dirs[i]);
     printf("\n");
@@ -475,8 +494,9 @@ void debug_read() {
 int print_file_contents(entry_data_t *file) {
     if(file==NULL) return -1;
     if(file->filename[0]==FEI_UNALLOC || file->filename[0]==FEI_DELETED) return -2;
-    if(file->attributes==FAF_DIR) return -3;
+    if(file->attributes & FAF_DIR) return -3;
     unsigned short current = file->low_order_address_bytes;
+    if(!(current>=(unsigned short)0x0002 && current<=(unsigned short)0xFFF6)) return 0;
     uint32_t wait=file->file_size;
     uint32_t cluster_size=br.bytes_per_sector*br.sectors_per_cluster;
     char *p;
@@ -503,6 +523,8 @@ int get_file_contents(entry_data_t *file) {
     if(file==NULL) return -1;
     if(file->filename[0]==FEI_UNALLOC || file->filename[0]==FEI_DELETED) return -2;
     if(file->attributes==FAF_DIR) return -3;
+    unsigned short current = file->low_order_address_bytes;
+    if(!(current>=(unsigned short)0x0002 && current<=(unsigned short)0xFFF6)) return 0;
     FILE *f;
     char formatted[13];
     format_filename(file->filename,formatted);
@@ -510,7 +532,6 @@ int get_file_contents(entry_data_t *file) {
     if(f==NULL) {
         return -5;
     }
-    unsigned short current = file->low_order_address_bytes;
     uint32_t wait=file->file_size;
     uint32_t cluster_size=br.bytes_per_sector*br.sectors_per_cluster;
     char *p;
@@ -539,13 +560,14 @@ int zip_file_contents(entry_data_t *file1, entry_data_t *file2, const char *outf
     if(file1==NULL || file2==NULL || outfile==NULL) return -1;
     if(file1->filename[0]==FEI_UNALLOC || file1->filename[0]==FEI_DELETED || file2->filename[0]==FEI_UNALLOC || file2->filename[0]==FEI_DELETED) return -2;
     if(file1->attributes==FAF_DIR || file2->attributes==FAF_DIR) return -3;
-    FILE *f;
-    f = fopen(outfile,"wb");
-    if(f==NULL) return -5;
-    if(DEBUG==1) printf("File opened\n");
     unsigned short current[2];
     current[0]=file1->low_order_address_bytes;
     current[1]=file2->low_order_address_bytes;
+    if(!(current[0]>=(unsigned short)0x0002 && current[0]<=(unsigned short)0xFFF6)) return 0;
+    if(!(current[1]>=(unsigned short)0x0002 && current[1]<=(unsigned short)0xFFF6)) return 0;
+    FILE *f;
+    f = fopen(outfile,"wb");
+    if(f==NULL) return -5;
     uint32_t wait[2];
     wait[0]=file1->file_size;
     wait[1]=file2->file_size;
@@ -608,7 +630,80 @@ int zip_file_contents(entry_data_t *file1, entry_data_t *file2, const char *outf
     return 0;
 }
 
+void print_root_info() {
+    entry_data_t *current = root;
+    int entries=0;
+    while(current->filename[0]!=FEI_UNALLOC) {
+        if(hidden_in_dir(current,1)==0) {
+            entries++;
+        }
+        current=(entry_data_t*)((char*)current+sizeof(entry_data_t));
+    }
+    printf("Entries in the root directory: %d\n", entries);
+    printf("Max entries: %hu\n",br.max_files_in_root);
+    printf("Used percentage: %d%%\n",(entries/br.max_files_in_root)*100);
+}
 
+void print_space_info() {
+    uint32_t fat_entries=(br.size_of_fat*br.bytes_per_sector)/4;
+    unsigned short *entry=(unsigned short *)fats[0];
+
+    int used_entries=0;
+    int free_entries=0;
+    int crpt_entries=0;
+    int last_entries=0;
+
+    for (int i=0; i<fat_entries; i++) {
+        if(*entry>=(unsigned short)0x0002 && *entry<=(unsigned short)0xFFF6) used_entries++;
+        else if (*entry==(unsigned short)0x0000) free_entries++;
+        else if (*entry==(unsigned short)0xFFF7) crpt_entries++;
+        else if (*entry>=(unsigned short)0xFFF8) last_entries++;
+        entry++;
+    }
+
+    printf("Used clusters: %d\n",used_entries);
+    printf("Free clusters: %d\n",free_entries);
+    printf("Corrupted clusters: %d\n",crpt_entries);
+    printf("Ending clusters: %d\n",last_entries);
+    printf("Cluster size in bytes: %d\n",br.sectors_per_cluster*br.bytes_per_sector);
+    printf("Cluster size in sectors: %d\n",br.sectors_per_cluster);
+}
+
+void print_file_info(entry_data_t *f) {
+    if(f==NULL) return;
+    printf("File path: \\");
+    for (int i=0; i<history.size; i++) printf("%s\\",history.dirs[i]);
+    char formatted[13];
+    format_filename(f->filename,formatted);
+    printf("%s\n",formatted);
+    filedate_t cd = get_date(f->creation_date);
+    filedate_t ad = get_date(f->access_date);
+    filedate_t md = get_date(f->modified_date);
+    filetime_t ct = get_time(f->creation_time);
+    filetime_t mt = get_time(f->modified_time);
+    
+    printf("Attributes: ");
+    (f->attributes & FAF_ARCHIVE)?printf("A+ "):printf("A- ");
+    (f->attributes & FAF_READ_ONLY)?printf("R+ "):printf("R- ");
+    (f->attributes & FAF_SYSTEM_FILE)?printf("S+ "):printf("S- ");
+    (f->attributes & FAF_HIDDEN_FILE)?printf("H+ "):printf("H- ");
+    (f->attributes & FAF_DIR)?printf("D+ "):printf("D- ");
+    (f->attributes & FAF_VOL_LABEL)?printf("V+ "):printf("V- ");
+
+    printf("\nFile size: %u\n",f->file_size);
+    printf("Last modified: %02d/%02d/%04d %02d:%02d\n",md.day,md.month,md.year,mt.hrs,mt.min);
+    printf("Last access: %02d/%02d/%04d\n",ad.day,ad.month,ad.year);
+    printf("Created: %02d/%02d/%04d %02d:%02d\n",cd.day,cd.month,cd.year,ct.hrs,ct.min);
+    printf("Clusters chain: ");
+    unsigned short cluster = f->low_order_address_bytes;
+    int clusters=0;
+    while(cluster>=(unsigned short)0x0002 && cluster<=(unsigned short)0xFFF6) {
+        printf("%hu ",cluster);
+        cluster=get_fat_index(cluster,fats[0]);
+        clusters++;
+    }
+    printf("\nClusters count: %d\n",clusters);
+}
 
 int main() {
 
