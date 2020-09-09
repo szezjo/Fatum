@@ -115,6 +115,7 @@ int load_disk() {
 }
 
 void command_prompt() {
+    printf("Fatum v0.000001\n");
     char buffer[256];
     char fn[13];
     entry_data_t *current = root;
@@ -301,6 +302,27 @@ void command_prompt() {
                 print_file_info(f);
             }
             else printf("What is a %s? A miserable pile of letters?\n", buffer);
+        }
+        else if (!strcmp(buffer,"help")) {
+            printf("dir - shows current directory's contents. You can also give a dir name to show its contents.\n");
+            printf("     syntax: dir [directory-name]\n");
+            printf("cd - changes current directory.\n");
+            printf("     syntax: cd directory-name\n");
+            printf("pwd - displays current directory's full path.\n");
+            printf("cat - shows file's contents.\n");
+            printf("     syntax: cat file-name\n");
+            printf("get - saves file to the host's folder.\n");
+            printf("     syntax: get file-name\n");
+            printf("zip - gets 2 files and mixes its contents to a new file.\n");
+            printf("     syntax: zip file1-name file2-name output-file-name\n");
+            printf("rootinfo - prints root directory info.\n");
+            printf("spaceinfo - prints volume information.\n");
+            printf("fileinfo - prints file details.\n");
+            printf("     syntax: fileinfo file-name\n");
+            printf("help - prints this very useful guide\n");
+        }
+        else if (!strcmp(buffer,"version")) {
+            printf("v0.000001\n");
         }
         else printf("What is a %s? A miserable pile of letters?\n", buffer);
     }
@@ -703,43 +725,11 @@ int main() {
     if(ret) return ret;
     history.dirs=NULL;
     history.size=0;
+    if(memcmp(fats[0],fats[1],br.size_of_fat*br.bytes_per_sector)) {
+        prepare_for_exit();
+        return -1;
+    }
 
-    printf("Assembly code: %02hhx %02hhx %02hhx\n",br.assembly_code[0],br.assembly_code[1],br.assembly_code[2]);
-    printf("OEM: %.*s\n",8,br.oem);
-    printf("Bytes per sector: %hd\n",br.bytes_per_sector);
-    printf("Sectors per cluster: %hhu\n",br.sectors_per_cluster);
-    printf("Reserved area size: %hu\n",br.reserved_area_size);
-    printf("Number of FATs: %hhu\n",br.number_of_fats);
-    printf("Max files in root: %hu\n",br.max_files_in_root);
-    printf("Sectors in FS: %hu\n",br.sectors_in_fs);
-    printf("Media type: 0x%02hhx\n",br.media_type);
-    printf("Size of FAT: %hu\n",br.size_of_fat);
-    printf("Sectors per track: %hu\n",br.sectors_per_track);
-    printf("Heads: %hu\n",br.heads);
-    printf("Sectors before start: %u\n",br.sectors_before_start);
-    printf("Sectors in FS (large): %u\n",br.sectors_in_fs_large);
-    printf("Drive number: 0x%02hhx\n",br.drive_number);
-    printf("Boot signature: 0x%02hhx\n",br.boot_signature);
-    printf("Volume serial number: %u\n",br.vol_serial_number);
-    printf("Volume label: %.*s\n",11,br.vol_label);
-    printf("FS type label: %.*s\n",8,br.fs_type);
-    printf("Signature value: 0x%04hx\n",br.signature_value);
-
-    entry_data_t *filep = root;
-
-    printf("Filename: %.*s\n",11,filep->filename);
-    printf("Attributes: 0x%02hhx\n",filep->attributes);
-    printf("Creation time: 0x%02hhx\n",filep->creation_time_tenths);
-    printf("File size: %u\n",filep->file_size);
-
-    assert(memcmp(fats[0],fats[1],br.size_of_fat*br.bytes_per_sector)==0);
-
-    show_dir_content(root);
-    int n=5;
-    printf("Cluster %d location: %ld\n", n, LOC_CLUSTER(n));
-    printf("FAT index: %hu\n", get_fat_index(n,fats[0]));
-    printf("%d",get_fat_index(n,fats[0])==(unsigned short)0xFFFF);
-    printf("\n");
     command_prompt();
     return 0;
 }
