@@ -12,30 +12,39 @@ char **fats;
 entry_data_t *root;
 char *data;
 
+char filename[256];
 history_t history;
 
-int load_disk(const char *filename) {
+size_t readblock(void* buffer, uint32_t first_block, size_t block_count) {
+    if(buffer==NULL || filename==NULL) {
+        return 0;
+    }
+    FILE *f = fopen(filename, "rb");
+    if (f==NULL) {
+        return 0;
+    }
+    fseek(f,first_block*512,SEEK_SET);
+    int ret = fread(buffer,512,block_count,f);
+    fclose(f);
+    if(ret!=block_count) {
+        return 0;
+    }
+    return block_count;
+}
+
+int load_disk() {
     if (filename==NULL) {
         printf("Error: No filename\n");
         return 1;
     }
-    FILE *f;
-    f = fopen(filename, "rb");
-    if (f==NULL) {
-        printf("Error: Wrong filename\n");
-        return 1;
-    }
-    int ret = fread(&br,sizeof(br),1,f);
-    if (ret!=1) {
-        fclose(f);
-        printf("Error: Can't read boot record data\n");
+    
+    int ret = readblock(&br,LOC_VOLSTART,1);
+    if(!ret) {
+        printf("Reading boot record failed\n");
         return 2;
     }
-
-    fseek(f,LOC_FAT1START,SEEK_SET);
     fats = malloc(sizeof(char*)*br.number_of_fats);
     if(fats==NULL) {
-        fclose(f);
         printf("Error: Can't allocate memory for FATs\n");
         return 3;
     }
@@ -44,7 +53,6 @@ int load_disk(const char *filename) {
         fats[i]=calloc(1,br.size_of_fat*br.bytes_per_sector);
         if(fats[i]==NULL) {
             for(int j=0; j<i; j++) free(fats[j]);
-            fclose(f);
             free(fats);
             printf("Error: Can't allocate memory for FAT %d\n",i);
             return 3;
@@ -52,30 +60,26 @@ int load_disk(const char *filename) {
     }
 
     for (int i=0; i<br.number_of_fats; i++) {
-        ret = fread(fats[i], br.size_of_fat*br.bytes_per_sector, 1, f);
-        if(ret!=1) {
+        ret = readblock(fats[i], LOC_FAT1START+((br.size_of_fat*br.bytes_per_sector)/512*i), (br.size_of_fat*br.bytes_per_sector)/512);
+        if(!ret) {
             for(int j=0; j<br.number_of_fats; j++) free(fats[j]);
-            fclose(f);
             free(fats);
             printf("Error: Can't read FAT %d data\n",i);
             return 2;
         }
     }
 
-    fseek(f,LOC_ROOTSTART,SEEK_SET);
     root = calloc(1,sizeof(entry_data_t)*br.max_files_in_root);
     if(root==NULL) {
         for(int j=0; j<br.number_of_fats; j++) free(fats[j]);
-        fclose(f);
         free(fats);
         printf("Error: Can't allocate memory for root dir\n");
         return 3;
     }
 
-    ret = fread(root, sizeof(entry_data_t)*br.max_files_in_root, 1, f);
-    if(ret!=1) {
+    ret = readblock(root, LOC_ROOTSTART, (sizeof(entry_data_t)*br.max_files_in_root)/512);
+    if(!ret) {
         for(int j=0; j<br.number_of_fats; j++) free(fats[j]);
-        fclose(f);
         free(fats);
         free(root);
         printf("Error: Can't read root data\n");
@@ -88,21 +92,18 @@ int load_disk(const char *filename) {
     else sectors_in_fs=br.sectors_in_fs_large;
     uint32_t data_sectors = sectors_in_fs-br.reserved_area_size-br.number_of_fats*br.size_of_fat-root_sectors;
     
-    fseek(f,LOC_DATASTART,SEEK_SET);
     data = calloc(1,data_sectors*br.bytes_per_sector);
     if(data==NULL) {
         for(int j=0; j<br.number_of_fats; j++) free(fats[j]);
-        fclose(f);
         free(fats);
         free(root);
         printf("Error: Can't allocate memory for data block\n");
         return 3;
     }
 
-    ret = fread(data, data_sectors*br.bytes_per_sector, 1, f);
-    if(ret!=1) {
+    ret = readblock(data, LOC_DATASTART, (data_sectors*br.bytes_per_sector)/512);
+    if(!ret) {
         for(int j=0; j<br.number_of_fats; j++) free(fats[j]);
-        fclose(f);
         free(fats);
         free(root);
         free(data);
@@ -110,7 +111,6 @@ int load_disk(const char *filename) {
         return 2;
     }
 
-    fclose(f);
     return 0;
 }
 
@@ -482,15 +482,6 @@ void flush_scan() {
     while ((c = getchar()) != '\n' && c != EOF) {}
 }
 
-void debug_read() {
-    printf("Volume start: %d\n",LOC_VOLSTART);
-    printf("Fat 1 start: %d\n",LOC_FAT1START);
-    printf("Fat 2 start: %d\n",LOC_FAT2START);
-    printf("Root start: %d\n",LOC_ROOTSTART);
-    printf("Data start: %ld\n", LOC_DATASTART );
-    for (int i=0; i<100; i++) printf("%02hhx ",data[i+JMP_CLUSTER(6)]);
-}
-
 int print_file_contents(entry_data_t *file) {
     if(file==NULL) return -1;
     if(file->filename[0]==FEI_UNALLOC || file->filename[0]==FEI_DELETED) return -2;
@@ -707,7 +698,9 @@ void print_file_info(entry_data_t *f) {
 
 int main() {
 
-    load_disk("fat16.bin");
+    strcpy(filename,"fat16.bin");
+    int ret = load_disk();
+    if(ret) return ret;
     history.dirs=NULL;
     history.size=0;
 

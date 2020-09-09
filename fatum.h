@@ -31,11 +31,11 @@
 
 // fseek locations
 #define LOC_VOLSTART 0
-#define LOC_FAT1START LOC_VOLSTART+br.reserved_area_size*br.bytes_per_sector
-#define LOC_FAT2START LOC_FAT1START+br.size_of_fat*br.bytes_per_sector
-#define LOC_ROOTSTART LOC_FAT1START+br.size_of_fat*br.number_of_fats*br.bytes_per_sector
-#define LOC_DATASTART LOC_ROOTSTART+(br.max_files_in_root*sizeof(entry_data_t))
-#define LOC_CLUSTER(n) LOC_DATASTART+(n-2)*br.sectors_per_cluster*br.bytes_per_sector
+#define LOC_FAT1START (LOC_VOLSTART+((br.reserved_area_size*br.bytes_per_sector)/512))
+#define LOC_FAT2START (LOC_FAT1START+((br.size_of_fat*br.bytes_per_sector)/512))
+#define LOC_ROOTSTART (LOC_FAT1START+((br.size_of_fat*br.number_of_fats*br.bytes_per_sector)/512))
+#define LOC_DATASTART (LOC_ROOTSTART+(((br.max_files_in_root*sizeof(entry_data_t)))/512))
+#define LOC_CLUSTER(n) (LOC_DATASTART+(n-2)*((br.sectors_per_cluster*br.bytes_per_sector)/512))
 
 // Cluster offset (from data block start)
 #define JMP_CLUSTER(n) (n-2)*br.sectors_per_cluster*br.bytes_per_sector
@@ -108,11 +108,11 @@ typedef struct history {
     size_t size;
 } history_t;
 
-int load_disk(const char *filename);
+size_t readblock(void* buffer, uint32_t first_block, size_t block_count);
+int load_disk();
 void command_prompt();
 void prepare_for_exit();
 void flush_scan();
-void debug_read();
 int hidden_in_dir(entry_data_t *entry, char hide_dots);
 filedate_t get_date(short date);
 filetime_t get_time(short time);
