@@ -116,7 +116,7 @@ int load_disk() {
 
 void command_prompt() {
     printf("Fatum v0.000001\n");
-    char buffer[256];
+    char buffer[256]="";
     char fn[13];
     entry_data_t *current = root;
     while(1) {
@@ -324,6 +324,7 @@ void command_prompt() {
         else if (!strcmp(buffer,"version")) {
             printf("v0.000001\n");
         }
+        else if (!strcmp(buffer,"")) continue;
         else printf("What is a %s? A miserable pile of letters?\n", buffer);
     }
     
