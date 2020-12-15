@@ -1,2 +1,2 @@
 # Fatum
-The shittiest FAT viewer ever. Use with caution. (WIP)
+The s\*\*\*\*iest FAT viewer ever. Use with caution. (WIP)
