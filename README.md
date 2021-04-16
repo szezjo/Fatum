@@ -11,7 +11,8 @@ The application reads fat16.bin file automatically. If you want, you can replace
 
 # Commands
 The app includes CLI that can be interacted with with supported commands:
-```dir - shows current directory's contents. You can also give a dir name to show its contents.
+```
+dir - shows current directory's contents. You can also give a dir name to show its contents.
      syntax: dir [directory-name]
 cd - changes current directory.
      syntax: cd directory-name
